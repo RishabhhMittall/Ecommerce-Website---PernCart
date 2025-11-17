@@ -4,18 +4,16 @@ import morgan from "morgan";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import serverless from "serverless-http";
 
 import productRoutes from "./routes/productRoutes.js";
 import chatbotRoutes from "./routes/chatbotRoutes.js";
 import { sql } from "./config/db.js";
 import { aj } from "./lib/arcjet.js";
 
-import serverless from "serverless-http";
-
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 const __dirname = path.resolve();
 
 app.use(express.json());
@@ -24,31 +22,20 @@ app.use(
   helmet({
     contentSecurityPolicy: false,
   })
-); // helmet is a security middleware that helps you protect your app by setting various HTTP headers
-app.use(morgan("dev")); // log the requests
+);
+app.use(morgan("dev"));
 
-// apply arcjet rate-limit to all routes
+// Arcjet rate-limit
 app.use(async (req, res, next) => {
   try {
-    const decision = await aj.protect(req, {
-      requested: 1, // specifies that each request consumes 1 token
-    });
+    const decision = await aj.protect(req, { requested: 1 });
 
     if (decision.isDenied()) {
-      if (decision.reason.isRateLimit()) {
-        res.status(429).json({ error: "Too Many Requests" });
-      } else if (decision.reason.isBot()) {
-        res.status(403).json({ error: "Bot access denied" });
-      } else {
-        res.status(403).json({ error: "Forbidden" });
-      }
-      return;
-    }
-
-    // check for spoofed bots
-    if (decision.results.some((result) => result.reason.isBot() && result.reason.isSpoofed())) {
-      res.status(403).json({ error: "Spoofed bot detected" });
-      return;
+      return res.status(decision.reason.isRateLimit() ? 429 : 403).json({
+        error: decision.reason.isRateLimit()
+          ? "Too Many Requests"
+          : "Forbidden",
+      });
     }
 
     next();
@@ -58,21 +45,19 @@ app.use(async (req, res, next) => {
   }
 });
 
+// API Routes (IMPORTANT: prefix only once here)
 app.use("/api/products", productRoutes);
 app.use("/api/chatbot", chatbotRoutes);
 
-if (process.env.NODE_ENV === "production") {
-  // server our react app
-  app.use(express.static(path.join(__dirname, "/frontend/dist")));
+// Serve frontend in production
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
+app.get("*", (req, res) =>
+  res.sendFile(path.resolve(__dirname, "../frontend/dist/index.html"))
+);
 
-  app.get("*", (req, res) => {
-    res.sendFile(path.resolve(__dirname, "frontend", "dist", "index.html"));
-  });
-}
-
+// ---- DB INIT ----
 async function initDB() {
   try {
-    // Products table
     await sql`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -83,27 +68,25 @@ async function initDB() {
       )
     `;
 
-    // Chat sessions table
     await sql`
       CREATE TABLE IF NOT EXISTS chat_sessions (
         id SERIAL PRIMARY KEY,
         session_id VARCHAR(255) NOT NULL,
-        role VARCHAR(20) NOT NULL, -- 'user' or 'assistant'
+        role VARCHAR(20) NOT NULL,
         content TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `
-    ;
-    await sql`
-  CREATE TABLE IF NOT EXISTS chat_history (
-    id SERIAL PRIMARY KEY,
-    session_id VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL,  -- 'user' or 'assistant'
-    message TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )
-`;
+    `;
 
+    await sql`
+      CREATE TABLE IF NOT EXISTS chat_history (
+        id SERIAL PRIMARY KEY,
+        session_id VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
 
     console.log("Database initialized successfully");
   } catch (err) {
@@ -111,9 +94,8 @@ async function initDB() {
   }
 }
 
-
-
-
 await initDB();
 
-export const handler = serverless(app);
+// IMPORTANT: Export handler (NO app.listen)
+export const config = { runtime: "nodejs18.x" };
+export default serverless(app);
