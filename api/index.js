@@ -97,5 +97,5 @@ async function initDB() {
 await initDB();
 
 // IMPORTANT: Export handler (NO app.listen)
-export const config = { runtime: "nodejs18.x" };
+export const config = { runtime: "nodejs" };
 export default serverless(app);
