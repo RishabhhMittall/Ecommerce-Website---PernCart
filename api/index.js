@@ -25,11 +25,9 @@ app.use(
 );
 app.use(morgan("dev"));
 
-// Arcjet rate-limit
 app.use(async (req, res, next) => {
   try {
     const decision = await aj.protect(req, { requested: 1 });
-
     if (decision.isDenied()) {
       return res.status(decision.reason.isRateLimit() ? 429 : 403).json({
         error: decision.reason.isRateLimit()
@@ -37,7 +35,6 @@ app.use(async (req, res, next) => {
           : "Forbidden",
       });
     }
-
     next();
   } catch (error) {
     console.log("Arcjet error", error);
@@ -45,17 +42,9 @@ app.use(async (req, res, next) => {
   }
 });
 
-// API Routes (IMPORTANT: prefix only once here)
 app.use("/api/products", productRoutes);
 app.use("/api/chatbot", chatbotRoutes);
 
-// Serve frontend in production
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
-app.get("*", (req, res) =>
-  res.sendFile(path.resolve(__dirname, "../frontend/dist/index.html"))
-);
-
-// ---- DB INIT ----
 async function initDB() {
   try {
     await sql`
@@ -96,14 +85,13 @@ async function initDB() {
 
 await initDB();
 
-// IMPORTANT: Export handler (NO app.listen)
-export const config = { runtime: "nodejs" };
-const handler = serverless(app);
-export default handler;
+// Vercel Serverless Handler
+export default serverless(app);
 
+// LOCAL DEVELOPMENT MODE
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Local server running on http://localhost:${PORT}`);
-  });
+  app.listen(PORT, () =>
+    console.log(`🚀 Local server running at http://localhost:${PORT}`)
+  );
 }
