@@ -98,4 +98,12 @@ await initDB();
 
 // IMPORTANT: Export handler (NO app.listen)
 export const config = { runtime: "nodejs" };
-export default serverless(app);
+const handler = serverless(app);
+export default handler;
+
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Local server running on http://localhost:${PORT}`);
+  });
+}
