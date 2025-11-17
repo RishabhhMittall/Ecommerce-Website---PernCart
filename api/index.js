@@ -10,6 +10,8 @@ import chatbotRoutes from "./routes/chatbotRoutes.js";
 import { sql } from "./config/db.js";
 import { aj } from "./lib/arcjet.js";
 
+import serverless from "serverless-http";
+
 dotenv.config();
 
 const app = express();
@@ -110,8 +112,8 @@ async function initDB() {
 }
 
 
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log("Server is running on port " + PORT);
-  });
-});
+
+
+await initDB();
+
+export const handler = serverless(app);

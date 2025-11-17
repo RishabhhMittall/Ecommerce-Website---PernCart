@@ -44,7 +44,7 @@ const Chatbot = () => {
       // Delete chat history from backend if session exists
       if (sessionId) {
         await axios.delete(
-          `http://localhost:3000/api/chatbot/history/${sessionId}`
+          `/api/chatbot/history/${sessionId}`
         );
       }
 
@@ -125,7 +125,7 @@ const Chatbot = () => {
     }
 
     try {
-      const res = await axios.post("http://localhost:3000/api/chatbot", {
+      const res = await axios.post("/api/chatbot", {
         message: input,
         sessionId,
       });
